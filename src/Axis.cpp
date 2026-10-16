@@ -141,9 +141,12 @@ bool Axis::shortCmd(uint32_t& durationIn) {
     // Flag whether to use this live point or hold pending extrapolation
     bool usePoint = true;
 
-    // If short commands are being received faster than the trigger threshold, use live mode.
     unsigned long lastInterval = millis() - lastShortTime;
-    if (lastInterval < LIVE_TRIGGER) {
+    if (lastInterval < MIN_SHORT_INTERVAL) {
+        // If the time since the last received short command is below the threshold, ignore command
+        return false;
+    } else if (lastInterval < LIVE_TRIGGER) {
+        // If short commands are being received faster than the trigger threshold, use live mode.
         liveMode = true;   // This triggers live mode
 
         // The rolling mean average time interval between live commands is calculated here
@@ -173,7 +176,7 @@ bool Axis::shortCmd(uint32_t& durationIn) {
         }
 
     // If we are still in live mode but a single command has come in after a delay
-        } else if (liveMode) {
+    } else if (liveMode) {
         liveCovergeSteps = LIVE_CONVERGE_STEPS;  // Reset the convergence counter
         usePoint = false;  // Do not use this data point to change motion
     } else {

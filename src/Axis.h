@@ -13,8 +13,9 @@
 #include <Arduino.h>   // provides uint32_t, uint16_t, etc.
 
 #define DECEL_CYCLE_TIME 1000
-#define LIVE_TRIGGER 25
-#define SHORT_MOVE_INTERVAL 50
+#define LIVE_TRIGGER 50
+#define SHORT_MOVE_INTERVAL 100
+#define MIN_SHORT_INTERVAL 5
 #define MEAN_INTERVAL_STEPS 5
 #define LIVE_CONVERGE_STEPS 10
 
