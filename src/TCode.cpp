@@ -139,30 +139,16 @@ void TCode::stringInput(const char* str) {
     }
 }
 
-// Reads off how many bytes are in the out buffer
-size_t TCode::available() {
-    size_t count = _outputLen - _outputPos;
-    // if buffer empty and D2 output dump available, dump next D2 line
-    if (!count && _D2dumpSlot >= 0) {
-        queueNextD2DumpLine();
-        count = _outputLen - _outputPos;
-    }
-    return count;
-}
-
 void TCode::formatRange(char *buf, const size_t len, const TCodeRange* &ranges, const size_t rangesLen)
 {
     size_t objSize = sizeof(TCodeRange);
     char line[len];
-    for(int i=0, i<rangesLen; i+objSize) {
-        TCodeRange* range = ranges[i];
-        strncat(line, range->maxKey, strlen(range->maxKey));
-        strncat(line, range->maxKey, strlen(range->maxKey));
-        strncat(line, range->maxKey, strlen(range->maxKey));
-        snprintf(line, sizeof(line), "%s-%u-%u",
+    for(int i=0; i<rangesLen; i+=objSize) {
+        const TCodeRange* range = &ranges[i];
+        snprintf(line, sizeof(line), "%s-%u-%u ",
                 range->key,
-                (unsigned)range.minValue,
-                (unsigned)range.maxValue);
+                range->minValue,
+                range->maxValue);
     }
     // snprintf(line, sizeof(line), "%c%u %u %u %s",
     //         (char)toupper(letter),
@@ -172,20 +158,14 @@ void TCode::formatRange(char *buf, const size_t len, const TCodeRange* &ranges, 
     //         _name);
 }
 
-void TCode::setTCodeCallback(std::function<bool(TCodeCallback)> f)
+void TCode::setTCodeCallback(std::function<void(const char*)> f)
 {
-    this._tcodeCallBackFunction = f;
+    _tcodeCallBackFunction = f == nullptr ? 0 : f;
 }
 
-void TCode::setTCodeRangeCallback(std::function<bool(TCodeRangeCallback)> f)
+void TCode::setTCodeRangeCallback(std::function<void()> f)
 {
-    this._tcodeRangeCallBackFunction = f;
-}
-
-// Reads off a byte from the out buffer
-int TCode::read() {
-    if (_outputPos >= _outputLen) return -1;
-    return (unsigned char)_outputBuffer[_outputPos++];
+    _tcodeRangeCallBackFunction = f == nullptr ? 0 : f;
 }
 
 // Stop all channels
@@ -319,17 +299,15 @@ void TCode::processAxisCommand(const char* cmd) {
 // "D" or Device command parser
 void TCode::processDeviceCommand(const char* cmd) {
     if (strcmp(cmd, "D0") == 0) {
-        queueResponse(_name);
         respond(_name);
     } else if (strcmp(cmd, "D1") == 0) {
-        queueResponse(TCODE_VERSION_INFO);
         respond(TCODE_VERSION_INFO);
     } else if (strcmp(cmd, "D2") == 0) {
-        _D2dumpSlot = 0;
-        queueNextD2DumpLine();
+        if(_tcodeRangeCallBackFunction)
+            _tcodeRangeCallBackFunction();
     } else if (strcmp(cmd, "DSTOP") == 0) {
         stopAll();
-        queueResponse("STOP");
+        respond("STOP");
     }
     // anything else is silently ignored
 }
@@ -339,7 +317,7 @@ void TCode::processDeviceCommand(const char* cmd) {
 bool TCode::parseRange(TCodeRange& range, const char* cmd) {
     size_t len = strlen(cmd);
     // Minimum viable: $L0-0-1  (8 chars). Full form $L0-0000-9999 is 13.
-    if (len < 8) return;
+    if (len < 8) return false;
 
     char letter;
     uint8_t index;
@@ -359,7 +337,7 @@ bool TCode::parseRange(TCodeRange& range, const char* cmd) {
     if (endMax == endMin + 1) return false;       // no digits after second hyphen
 
     // Optional: reject leftover junk after the max (spaces already stripped by byteInput)
-    if (*endMax != '\0') return;
+    if (*endMax != '\0') return false;
 
     Axis* ax = nullptr;
     switch (letter) {
@@ -370,16 +348,11 @@ bool TCode::parseRange(TCodeRange& range, const char* cmd) {
     }
     if (!ax) return false;                        // valid format, but that channel isn't registered
 
-    range.minKey[0] = (char)tolower(letter);
-    range.minKey[1] = (char)('0' + index);
-    range.minKey[2] = '\0';
+    range.key[0] = (char)tolower(letter);
+    range.key[1] = (char)('0' + index);
+    range.key[2] = '\0';
     range.minValue = constrain(ymin,0,9999);
-    range.maxKey[0] = (char)tolower(letter);
-    range.maxKey[1] = (char)('0' + index);
-    range.maxKey[2] = '\0';
     range.maxValue = constrain(ymax,0,9999);
-    if(this._tcodeRangeCallBackFunction)
-        this._tcodeRangeCallBackFunction(range);
     return true;
 }
 
@@ -430,18 +403,18 @@ void TCode::executeAll() {
     }
 }
 
-// Clears output buffer and loads a string for output
-void TCode::queueResponse(const char* text) {
-    _outputLen = 0;
-    _outputPos = 0;
-    if (text) {
-        while (*text && _outputLen < 63) {
-            _outputBuffer[_outputLen++] = *text++;
-        }
-    }
-    if (_outputLen < 63) { _outputBuffer[_outputLen++] = '\r'; }
-    if (_outputLen < 63) { _outputBuffer[_outputLen++] = '\n'; }
-}
+// // Clears output buffer and loads a string for output
+// void TCode::queueResponse(const char* text) {
+//     _outputLen = 0;
+//     _outputPos = 0;
+//     if (text) {
+//         while (*text && _outputLen < 63) {
+//             _outputBuffer[_outputLen++] = *text++;
+//         }
+//     }
+//     if (_outputLen < 63) { _outputBuffer[_outputLen++] = '\r'; }
+//     if (_outputLen < 63) { _outputBuffer[_outputLen++] = '\n'; }
+// }
 
 // // Puts a specific D2 output report into the output buffer
 // void TCode::queueD2AxisReport(char letter, uint8_t index) {
@@ -534,8 +507,8 @@ bool TCode::parseChannel(const char* cmd, char& letter, uint8_t& index) const {
 
 void TCode::respond(const char *text) {
     // Serial.printf("respond: %s\n", text);
-    if(tcode_callback)
-        tcode_callback(text);
+    if(_tcodeCallBackFunction)
+        _tcodeCallBackFunction(text);
     // else 
     //     Serial.printf("tcode_callback null: %s\n", text);
 }

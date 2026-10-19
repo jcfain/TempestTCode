@@ -9,13 +9,6 @@
 #ifndef TCODE_H
 #define TCODE_H
 
-
-#if defined(ARDUINO_ARCH_ESP32)
-    #include <Preferences.h>
-#else
-    #include <EEPROM.h>
-#endif
-
 #include "Axis.h"      // 
 #include <Arduino.h>   // provides uint32_t, uint16_t, etc.
 
@@ -72,27 +65,22 @@ public:
     // This can be used to feed a string into the interpreter
     void stringInput(const char* str);
 
-    // Output buffer — read exactly like Serial
-    size_t available();
-    int read();
-
     // All stop command, used by DSTOP
     void stopAll();
+
+    // Parses out the TCode range from a save comand
+    bool parseRange(TCodeRange& range, const char* cmd);
 
     // Formats the TCodeRange object into a tcode string to return to client
     void formatRange(char *buf, const size_t len, const TCodeRange* &ranges, const size_t rangesLen);
 
     // Sets the callback function used by TCode
-	void setTCodeCallback(std::function<void (TCodeCallback)> f);
+	void setTCodeCallback(std::function<void (const char*)> f);
 
     // Sets the callback function used by TCode
-	void setTCodeRangeCallback(std::function<void (TCodeRangeCallback)> f);
+	void setTCodeRangeCallback(std::function<void ()> f);
 
 private:
-    // ESP32 data storage
-    #if defined(ARDUINO_ARCH_ESP32)
-        Preferences _prefs;
-    #endif
 
     // Device name
     const char* _name;
@@ -108,28 +96,20 @@ private:
     char _cmdBuffer[48] = {0};
     uint8_t _cmdLen = 0;
 
-    // Simple output buffer for D responses
-    char _outputBuffer[64] = {0};
-    uint8_t _outputLen = 0;
-    uint8_t _outputPos = 0;
-    int8_t _D2dumpSlot = -1; 
-
-    std::function<bool (TCodeCallback)> _tcodeCallBackFunction = 0;
-    std::function<bool (TCodeRangeCallback)> _tcodeCallBackFunction = 0;
+    std::function<void (const char*)> _tcodeCallBackFunction = 0;
+    std::function<void ()> _tcodeRangeCallBackFunction = 0;
 
     // Command processing
     void processCommand(const char* cmd);
     void processAxisCommand(const char* cmd);
     void processDeviceCommand(const char* cmd);
-    // Parses out the TCode range from a save comand
-    void parseRange(TCodeRange& range, const char* cmd) 
     void processSaveCommand(const char* cmd);
     void executeAll();
 
     // Output functions
-    void queueResponse(const char* text);
-    void queueD2AxisReport(char letter, uint8_t index);
-    void queueNextD2DumpLine();
+    // void queueResponse(const char* text);
+    // void queueD2AxisReport(char letter, uint8_t index);
+    // void queueNextD2DumpLine();
     void respond(const char* text);
 
     // Helper function that turns "L3" into letter='L' and index=3
