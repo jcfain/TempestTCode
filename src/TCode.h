@@ -9,8 +9,10 @@
 #ifndef TCODE_H
 #define TCODE_H
 
-#include "Axis.h"      // 
-#include <Arduino.h>   // provides uint32_t, uint16_t, etc.
+#include <stdint.h>
+#include <functional>
+#include "Axis.h"
+#include "common.h"
 
 #ifndef TCODE_VERSION_INFO
 #define TCODE_VERSION_INFO  "TCode v0.4"
@@ -19,8 +21,8 @@
 struct TCodeRange
 {
     char key[3];
-    uint minValue;
-    uint maxValue;
+    uint16_t minValue;
+    uint16_t maxValue;
 };
 
 // ============================================
@@ -28,7 +30,7 @@ struct TCodeRange
 // ============================================
 class TCode {
 public:
-    TCode(const char* nameIn);
+    TCode(const char* nameIn, std::function<uint64_t ()> millisCallBackFunction);
 
     // Register an axis to its official TCode channel.
     // Pass the channel exactly as the protocol expects ("L0", "R3", "V7", "A1", etc.).
@@ -84,6 +86,7 @@ private:
 
     // Device name
     const char* _name;
+    Common _common;
 
     // Internal storage — fixed arrays of pointers, one per channel type
     Axis* _Lin[10] = {nullptr};
@@ -98,6 +101,7 @@ private:
 
     std::function<void (const char*)> _tcodeCallBackFunction = 0;
     std::function<void ()> _tcodeRangeCallBackFunction = 0;
+    
 
     // Command processing
     void processCommand(const char* cmd);

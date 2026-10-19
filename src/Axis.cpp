@@ -1,11 +1,12 @@
 #include "Axis.h"
+#include "common.h"
 
 // ============================================
 //           AXIS HANDLER CLASS
 // ============================================
 Axis::Axis(const char* nameIn, uint16_t startPosIn)
     : name(nameIn),
-      startTime(millis()),                    // stamp the moment of creation
+      startTime(Common::millis()),                    // stamp the moment of creation
       duration(0),
       startPos(startPosIn),
       endPos(startPosIn),
@@ -28,10 +29,10 @@ uint16_t Axis::getPosition()
     // Check whether time is outside of movement bounds
     // zero duration means the axis is stopped
     // if out, auto-set new movement parameters via setTimeout() function
-    if (millis() - startTime > duration && duration != 0 ) { setTimeout(); }
+    if (Common::millis() - startTime > duration && duration != 0 ) { setTimeout(); }
 
     // Get and return the current position
-    uint16_t position = getPositionFromCurve(millis() - startTime);
+    uint16_t position = getPositionFromCurve(Common::millis() - startTime);
     return position;
 }
 
@@ -41,10 +42,10 @@ int32_t Axis::getVelocity(int perInterval)
     // Check whether time is outside of movement bounds
     // zero duration means the axis is stopped
     // if out, auto-set new movement parameters via setTimeout() function
-    if (millis() - startTime > duration && duration != 0 ) { setTimeout(); }
+    if (Common::millis() - startTime > duration && duration != 0 ) { setTimeout(); }
 
     // Get and return the current position
-    int32_t velocity = getVelocityFromCurve(millis() - startTime, perInterval);
+    int32_t velocity = getVelocityFromCurve(Common::millis() - startTime, perInterval);
     return velocity;
 }
 
@@ -121,7 +122,7 @@ bool Axis::setAxis()
     bufferSet = false;
 
     // The start point for the new axis movement is the current time
-    startTime = millis();
+    startTime = Common::millis();
 
     return true; // Flag to return that the axis movement has been updated
 }
@@ -141,7 +142,7 @@ bool Axis::shortCmd(uint32_t& durationIn) {
     // Flag whether to use this live point or hold pending extrapolation
     bool usePoint = true;
 
-    unsigned long lastInterval = millis() - lastShortTime;
+    unsigned long lastInterval = Common::millis() - lastShortTime;
     if (lastInterval < MIN_SHORT_INTERVAL) {
         // If the time since the last received short command is below the threshold, ignore command
         return false;
@@ -164,9 +165,9 @@ bool Axis::shortCmd(uint32_t& durationIn) {
         // Also needs an acceleration limit imposed?
         if (liveCovergeSteps > 1) {
             // Project a point several time steps ahead of the new curve based on new data points
-            int32_t projTargetPos = map(liveCovergeSteps*durationIn,0,durationIn,lastShortPos,bufferTargetPos);
+            int32_t projTargetPos = Common::map(liveCovergeSteps*durationIn,0,durationIn,lastShortPos,bufferTargetPos);
             // Move to a point on this line that's 1 time step ahead
-            projTargetPos = map(durationIn,0,liveCovergeSteps*durationIn,lastShortPos,projTargetPos);
+            projTargetPos = Common::map(durationIn,0,liveCovergeSteps*durationIn,lastShortPos,projTargetPos);
             // Clamp and make this the movement target
             if (projTargetPos > 10000) { projTargetPos = 10000; }
             if (projTargetPos < 0) { projTargetPos = 0; }
@@ -186,7 +187,7 @@ bool Axis::shortCmd(uint32_t& durationIn) {
     }
 
     // Record the last short command as a data point for future extrapolation
-    lastShortTime = millis();
+    lastShortTime = Common::millis();
     lastShortPos = bufferTargetPos; 
 
     return usePoint;   

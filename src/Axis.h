@@ -10,7 +10,7 @@
 #ifndef AXIS_H
 #define AXIS_H
 
-#include <Arduino.h>   // provides uint32_t, uint16_t, etc.
+#include <stdint.h>
 
 #define DECEL_CYCLE_TIME 1000
 #define LIVE_TRIGGER 50

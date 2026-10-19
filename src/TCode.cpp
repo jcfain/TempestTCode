@@ -1,4 +1,5 @@
 #include "Axis.h"       // TCode Axis library
+#include "common.h"
 #include "TCode.h"      // TCode library header
 #include <cstddef>
 #include <ctype.h>      // toupper, isdigit
@@ -9,8 +10,9 @@
 // ============================================
 //           TCODE CLASS
 // ============================================
-TCode::TCode(const char* nameIn)
-    :   _name(nameIn)
+TCode::TCode(const char* nameIn, std::function<uint64_t ()> millisCallBackFunction)
+    :   _name(nameIn),
+        _common(millisCallBackFunction)
 {}
 
 // Registers an axis with the TCode class for use
@@ -351,8 +353,8 @@ bool TCode::parseRange(TCodeRange& range, const char* cmd) {
     range.key[0] = (char)tolower(letter);
     range.key[1] = (char)('0' + index);
     range.key[2] = '\0';
-    range.minValue = constrain(ymin,0,9999);
-    range.maxValue = constrain(ymax,0,9999);
+    range.minValue = Common::clamp(ymin,0,9999);
+    range.maxValue = Common::clamp(ymax,0,9999);
     return true;
 }
 
