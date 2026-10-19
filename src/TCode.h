@@ -23,6 +23,12 @@
 #define TCODE_VERSION_INFO  "TCode v0.4"
 #endif
 
+struct TCodeRange
+{
+    char key[3];
+    uint minValue;
+    uint maxValue;
+};
 
 // ============================================
 //           TCODE CLASS
@@ -73,6 +79,15 @@ public:
     // All stop command, used by DSTOP
     void stopAll();
 
+    // Formats the TCodeRange object into a tcode string to return to client
+    void formatRange(char *buf, const size_t len, const TCodeRange* &ranges, const size_t rangesLen);
+
+    // Sets the callback function used by TCode
+	void setTCodeCallback(std::function<void (TCodeCallback)> f);
+
+    // Sets the callback function used by TCode
+	void setTCodeRangeCallback(std::function<void (TCodeRangeCallback)> f);
+
 private:
     // ESP32 data storage
     #if defined(ARDUINO_ARCH_ESP32)
@@ -99,10 +114,15 @@ private:
     uint8_t _outputPos = 0;
     int8_t _D2dumpSlot = -1; 
 
+    std::function<bool (TCodeCallback)> _tcodeCallBackFunction = 0;
+    std::function<bool (TCodeRangeCallback)> _tcodeCallBackFunction = 0;
+
     // Command processing
     void processCommand(const char* cmd);
     void processAxisCommand(const char* cmd);
     void processDeviceCommand(const char* cmd);
+    // Parses out the TCode range from a save comand
+    void parseRange(TCodeRange& range, const char* cmd) 
     void processSaveCommand(const char* cmd);
     void executeAll();
 
@@ -110,6 +130,7 @@ private:
     void queueResponse(const char* text);
     void queueD2AxisReport(char letter, uint8_t index);
     void queueNextD2DumpLine();
+    void respond(const char* text);
 
     // Helper function that turns "L3" into letter='L' and index=3
     bool parseChannel(const char* channel, char& letter, uint8_t& index) const;

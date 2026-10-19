@@ -1,5 +1,6 @@
 #include "Axis.h"       // TCode Axis library
 #include "TCode.h"      // TCode library header
+#include <cstddef>
 #include <ctype.h>      // toupper, isdigit
 #include <stdlib.h>     // strtol
 #include <string.h>     // strlen
@@ -149,6 +150,38 @@ size_t TCode::available() {
     return count;
 }
 
+void TCode::formatRange(char *buf, const size_t len, const TCodeRange* &ranges, const size_t rangesLen)
+{
+    size_t objSize = sizeof(TCodeRange);
+    char line[len];
+    for(int i=0, i<rangesLen; i+objSize) {
+        TCodeRange* range = ranges[i];
+        strncat(line, range->maxKey, strlen(range->maxKey));
+        strncat(line, range->maxKey, strlen(range->maxKey));
+        strncat(line, range->maxKey, strlen(range->maxKey));
+        snprintf(line, sizeof(line), "%s-%u-%u",
+                range->key,
+                (unsigned)range.minValue,
+                (unsigned)range.maxValue);
+    }
+    // snprintf(line, sizeof(line), "%c%u %u %u %s",
+    //         (char)toupper(letter),
+    //         (unsigned)index,
+    //         (unsigned)ymin,
+    //         (unsigned)ymax,
+    //         _name);
+}
+
+void TCode::setTCodeCallback(std::function<bool(TCodeCallback)> f)
+{
+    this._tcodeCallBackFunction = f;
+}
+
+void TCode::setTCodeRangeCallback(std::function<bool(TCodeRangeCallback)> f)
+{
+    this._tcodeRangeCallBackFunction = f;
+}
+
 // Reads off a byte from the out buffer
 int TCode::read() {
     if (_outputPos >= _outputLen) return -1;
@@ -178,8 +211,11 @@ void TCode::processCommand(const char* cmd) {
         processDeviceCommand(cmd);
     } else if (first == '$') {
         processSaveCommand(cmd);
+    } else  {
+        // anything else is send back to the firmware 
+        // to decide what it wants to do
+        respond(cmd);
     }
-    // anything else is silently ignored
 }
 
 // Axis command parser
@@ -284,8 +320,10 @@ void TCode::processAxisCommand(const char* cmd) {
 void TCode::processDeviceCommand(const char* cmd) {
     if (strcmp(cmd, "D0") == 0) {
         queueResponse(_name);
+        respond(_name);
     } else if (strcmp(cmd, "D1") == 0) {
         queueResponse(TCODE_VERSION_INFO);
+        respond(TCODE_VERSION_INFO);
     } else if (strcmp(cmd, "D2") == 0) {
         _D2dumpSlot = 0;
         queueNextD2DumpLine();
@@ -296,10 +334,9 @@ void TCode::processDeviceCommand(const char* cmd) {
     // anything else is silently ignored
 }
 
-// "$" or Save command parser
-void TCode::processSaveCommand(const char* cmd) {
-    if (!cmd || cmd[0] != '$') return;
-
+// Parse range from $ Save command
+// Invalid format returns false.
+bool TCode::parseRange(TCodeRange& range, const char* cmd) {
     size_t len = strlen(cmd);
     // Minimum viable: $L0-0-1  (8 chars). Full form $L0-0000-9999 is 13.
     if (len < 8) return;
@@ -307,21 +344,19 @@ void TCode::processSaveCommand(const char* cmd) {
     char letter;
     uint8_t index;
     // cmd+1 is "L0-0000-9999" — parseChannel wants letter + digit
-    if (!parseChannel(cmd + 1, letter, index)) return;
+    if (!parseChannel(cmd + 1, letter, index)) return false;
 
     // After "$TX" we require a hyphen
-    if (cmd[3] != '-') return;
+    if (cmd[3] != '-') return false;
 
     char* endMin;
     long ymin = strtol(cmd + 4, &endMin, 10);
-    if (endMin == cmd + 4) return;          // no digits after first hyphen
-    if (*endMin != '-') return;             // second hyphen required
-    if (ymin < 0 || ymin > 9999) return;
+    if (endMin == cmd + 4) return false;          // no digits after first hyphen
+    if (*endMin != '-') return false;             // second hyphen required
 
     char* endMax;
     long ymax = strtol(endMin + 1, &endMax, 10);
-    if (endMax == endMin + 1) return;       // no digits after second hyphen
-    if (ymax < 0 || ymax > 9999) return;
+    if (endMax == endMin + 1) return false;       // no digits after second hyphen
 
     // Optional: reject leftover junk after the max (spaces already stripped by byteInput)
     if (*endMax != '\0') return;
@@ -333,40 +368,55 @@ void TCode::processSaveCommand(const char* cmd) {
         case 'V': ax = Vib(index); break;
         case 'A': ax = Aux(index); break;
     }
-    if (!ax) return;                        // valid format, but that channel isn't registered
+    if (!ax) return false;                        // valid format, but that channel isn't registered
 
-    #if defined(ARDUINO_ARCH_ESP32)
-        // ESP32 preferences parameter save
-        _prefs.begin("tcode", false);
-        ymin = constrain(ymin,0,9999);
-        ymax = constrain(ymax,0,9999);
-        char key[4];
-        key[0] = (char)tolower(letter);
-        key[1] = (char)('0' + index);
-        key[3] = '\0';
-        key[2] = 'l'; 
-        _prefs.putInt(key, (int)ymin);
-        key[2] = 'u';
-        _prefs.putInt(key, (int)ymax);
-        _prefs.end();
-    #else
-        // Arduino-style EEPROM write, as on previous TCode devices
-        int memIndex = 0;
-        switch (letter) {
-            case 'L': memIndex = 0; break;
-            case 'R': memIndex = 80; break;
-            case 'V': memIndex = 160; break;
-            case 'A': memIndex = 240; break;
-        }
-        memIndex += 8*index;
-        ymin = constrain(ymin,0,9999);
-        EEPROM.put(memIndex, ymin-1);
-        ymax = constrain(ymax,0,9999);
-        EEPROM.put(memIndex+4, ymax-10000);
-    #endif
+    range.minKey[0] = (char)tolower(letter);
+    range.minKey[1] = (char)('0' + index);
+    range.minKey[2] = '\0';
+    range.minValue = constrain(ymin,0,9999);
+    range.maxKey[0] = (char)tolower(letter);
+    range.maxKey[1] = (char)('0' + index);
+    range.maxKey[2] = '\0';
+    range.maxValue = constrain(ymax,0,9999);
+    if(this._tcodeRangeCallBackFunction)
+        this._tcodeRangeCallBackFunction(range);
+    return true;
+}
 
-    // Return report if preferences changed
-    queueD2AxisReport(letter, index);
+// "$" or Save command parser
+void TCode::processSaveCommand(const char* cmd) {
+    if (!cmd || cmd[0] != '$') return;
+    
+    TCodeRange range;
+    if(!parseRange(range, cmd))// Only range saves are currently supported in tcode spec.
+        respond(cmd);// Just send it back to the firmware if its not a range
+
+    // #if defined(ARDUINO_ARCH_ESP32)
+    //     // ESP32 preferences parameter save
+    //     _prefs.begin("tcode", false);
+    //     int ymin = constrain(range.minValue,0,9999);
+    //     int ymax = constrain(range.maxValue,0,9999);
+    //     _prefs.putInt(range.minKey, (int)ymin);
+    //     _prefs.putInt(range.maxKey, (int)ymax);
+    //     _prefs.end();
+    // #else
+    //     // Arduino-style EEPROM write, as on previous TCode devices
+    //     int memIndex = 0;
+    //     switch (letter) {
+    //         case 'L': memIndex = 0; break;
+    //         case 'R': memIndex = 80; break;
+    //         case 'V': memIndex = 160; break;
+    //         case 'A': memIndex = 240; break;
+    //     }
+    //     memIndex += 8*index;
+    //     int ymin = constrain(range.minValue,0,9999);
+    //     EEPROM.put(memIndex, range.minValue-1);
+    //     int ymax = constrain(range.maxValue,0,9999);
+    //     EEPROM.put(memIndex+4, range.maxValue-10000);
+    // #endif
+
+    // // Return report if preferences changed
+    // queueD2AxisReport(letter, index);
 
 }
 
@@ -393,85 +443,85 @@ void TCode::queueResponse(const char* text) {
     if (_outputLen < 63) { _outputBuffer[_outputLen++] = '\n'; }
 }
 
-// Puts a specific D2 output report into the output buffer
-void TCode::queueD2AxisReport(char letter, uint8_t index) {
-    Axis* ax = nullptr;
-    switch (toupper(letter)) {
-        case 'L': ax = Lin(index); break;
-        case 'R': ax = Rot(index); break;
-        case 'V': ax = Vib(index); break;
-        case 'A': ax = Aux(index); break;
-    }
-    if (!ax) return;
+// // Puts a specific D2 output report into the output buffer
+// void TCode::queueD2AxisReport(char letter, uint8_t index) {
+//     Axis* ax = nullptr;
+//     switch (toupper(letter)) {
+//         case 'L': ax = Lin(index); break;
+//         case 'R': ax = Rot(index); break;
+//         case 'V': ax = Vib(index); break;
+//         case 'A': ax = Aux(index); break;
+//     }
+//     if (!ax) return;
 
-    int ymin = 0;
-    int ymax = 9999;
-    #if defined(ARDUINO_ARCH_ESP32)
-        // ESP32 preferences parameter load
-        _prefs.begin("tcode", true);
+//     int ymin = 0;
+//     int ymax = 9999;
+//     #if defined(ARDUINO_ARCH_ESP32)
+//         // ESP32 preferences parameter load
+//         _prefs.begin("tcode", true);
 
-        char key[4];
-        key[0] = (char)tolower(letter);
-        key[1] = (char)('0' + index);
-        key[3] = '\0';
-        key[2] = 'u'; 
-        ymax = _prefs.getInt(key, 9999);
-        key[2] = 'l';
-        ymin = _prefs.getInt(key, 0);
-        _prefs.end();
-    #else
-        // Arduino-style EEPROM read, as on previous TCode devices
-        int memIndex = 0;
-        switch (letter) {
-            case 'L': memIndex = 0; break;
-            case 'R': memIndex = 80; break;
-            case 'V': memIndex = 160; break;
-            case 'A': memIndex = 240; break;
-        }
-        memIndex += 8*index;
-        EEPROM.get(memIndex, ymin);
-        ymin += 1;
-        EEPROM.get(memIndex+4, ymax);
-        ymax += 10000;
-    #endif
-    ymin = constrain(ymin,0,9999);
-    ymax = constrain(ymax,0,9999);
+//         char key[4];
+//         key[0] = (char)tolower(letter);
+//         key[1] = (char)('0' + index);
+//         key[3] = '\0';
+//         key[2] = 'u'; 
+//         ymax = _prefs.getInt(key, 9999);
+//         key[2] = 'l';
+//         ymin = _prefs.getInt(key, 0);
+//         _prefs.end();
+//     #else
+//         // Arduino-style EEPROM read, as on previous TCode devices
+//         int memIndex = 0;
+//         switch (letter) {
+//             case 'L': memIndex = 0; break;
+//             case 'R': memIndex = 80; break;
+//             case 'V': memIndex = 160; break;
+//             case 'A': memIndex = 240; break;
+//         }
+//         memIndex += 8*index;
+//         EEPROM.get(memIndex, ymin);
+//         ymin += 1;
+//         EEPROM.get(memIndex+4, ymax);
+//         ymax += 10000;
+//     #endif
+//     ymin = constrain(ymin,0,9999);
+//     ymax = constrain(ymax,0,9999);
 
-    const char* _name = ax->getName();
-    if (!_name) _name = "";
+//     const char* _name = ax->getName();
+//     if (!_name) _name = "";
 
-    char line[64];
-    snprintf(line, sizeof(line), "%c%u %u %u %s",
-             (char)toupper(letter),
-             (unsigned)index,
-             (unsigned)ymin,
-             (unsigned)ymax,
-             _name);
-    queueResponse(line);
-}
+//     char line[64];
+//     snprintf(line, sizeof(line), "%c%u %u %u %s",
+//              (char)toupper(letter),
+//              (unsigned)index,
+//              (unsigned)ymin,
+//              (unsigned)ymax,
+//              _name);
+//     queueResponse(line);
+// }
 
-// Puts the next D2 output report into the output buffer 
-void TCode::queueNextD2DumpLine() {
-    while (_D2dumpSlot >= 0 && _D2dumpSlot < 40) {
-        uint8_t bank  = _D2dumpSlot / 10;   // 0=L 1=R 2=V 3=A
-        uint8_t index = _D2dumpSlot % 10;
-        _D2dumpSlot++;
+// // Puts the next D2 output report into the output buffer 
+// void TCode::queueNextD2DumpLine() {
+//     while (_D2dumpSlot >= 0 && _D2dumpSlot < 40) {
+//         uint8_t bank  = _D2dumpSlot / 10;   // 0=L 1=R 2=V 3=A
+//         uint8_t index = _D2dumpSlot % 10;
+//         _D2dumpSlot++;
 
-        Axis* ax = nullptr;
-        char letter = 'L';
-        switch (bank) {
-            case 0: letter = 'L'; ax = Lin(index); break;
-            case 1: letter = 'R'; ax = Rot(index); break;
-            case 2: letter = 'V'; ax = Vib(index); break;
-            case 3: letter = 'A'; ax = Aux(index); break;
-        }
-        if (!ax) continue;
+//         Axis* ax = nullptr;
+//         char letter = 'L';
+//         switch (bank) {
+//             case 0: letter = 'L'; ax = Lin(index); break;
+//             case 1: letter = 'R'; ax = Rot(index); break;
+//             case 2: letter = 'V'; ax = Vib(index); break;
+//             case 3: letter = 'A'; ax = Aux(index); break;
+//         }
+//         if (!ax) continue;
 
-        queueD2AxisReport(letter, index);
-        return;   // one line only
-    }
-    _D2dumpSlot = -1;   // finished
-}
+//         queueD2AxisReport(letter, index);
+//         return;   // one line only
+//     }
+//     _D2dumpSlot = -1;   // finished
+// }
 
 // Helper function that verifies that a channel named at the start of a string is registered
 bool TCode::parseChannel(const char* cmd, char& letter, uint8_t& index) const {
@@ -480,4 +530,12 @@ bool TCode::parseChannel(const char* cmd, char& letter, uint8_t& index) const {
     if (cmd[1] < '0' || cmd[1] > '9') return false;
     index = cmd[1] - '0';
     return (letter == 'L' || letter == 'R' || letter == 'V' || letter == 'A');
+}
+
+void TCode::respond(const char *text) {
+    // Serial.printf("respond: %s\n", text);
+    if(tcode_callback)
+        tcode_callback(text);
+    // else 
+    //     Serial.printf("tcode_callback null: %s\n", text);
 }
