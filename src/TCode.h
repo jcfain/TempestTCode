@@ -4,6 +4,7 @@
 // v0.4.1 Experimental build, 1-6-26
 // v0.4.2 Added getPosition(), getVelocity(), getlast() axis access functions
 // v0.4.3 - D2 function added 13-9-26
+// v0.4.4 - Removed Arduino/Platform dependency and Use callbacks instead of response buffer.
 
 
 #ifndef TCODE_H
