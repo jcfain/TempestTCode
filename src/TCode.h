@@ -13,20 +13,13 @@
 #include <stdint.h>
 #include <functional>
 #include "TCodeEnum.h"
+#include "TCodeRange.h"
 #include "Axis.h"
 #include "TCodeCommon.h"
 
 #ifndef TCODE_VERSION_INFO
 #define TCODE_VERSION_INFO  "TCode v0.4"
 #endif
-
-
-struct TCodeRange
-{
-    char key[3];
-    uint16_t minValue;
-    uint16_t maxValue;
-};
 
 // ============================================
 //           TCODE CLASS
