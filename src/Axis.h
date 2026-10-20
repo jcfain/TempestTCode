@@ -11,6 +11,7 @@
 #define AXIS_H
 
 #include <stdint.h>
+#include "TCodeEnum.h"
 
 #define DECEL_CYCLE_TIME 1000
 #define LIVE_TRIGGER 50
@@ -19,19 +20,6 @@
 #define MEAN_INTERVAL_STEPS 5
 #define LIVE_CONVERGE_STEPS 10
 
-enum class InputType {
-    SHORT,      // no timing parameter — use sensible default interval/speed
-    SPEED,      // extended parameter = average speed (pos units per 100 ms)
-    INTERVAL    // extended parameter = duration in microseconds
-};
-
-enum class MoveStyle {
-    RAMPED,     // linear / constant velocity (no easing)
-    EASE_IN,    // quadratic start from rest
-    EASE_OUT,   // quadratic soft landing
-    EASE_BOTH,  // full cubic smoothstep (rest-to-rest)
-    GRADIENT    // full Hermite control using supplied start/end gradients
-};
 
 
 // ============================================

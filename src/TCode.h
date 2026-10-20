@@ -12,6 +12,7 @@
 
 #include <stdint.h>
 #include <functional>
+#include "TCodeEnum.h"
 #include "Axis.h"
 #include "common.h"
 
@@ -24,13 +25,6 @@ struct TCodeRange
     char key[3];
     uint16_t minValue;
     uint16_t maxValue;
-};
-
-enum class TCodeEvent {
-    NOTIFY,
-    OTHER,
-    RANGE_GET,
-    RANGE_STORE
 };
 
 // ============================================
