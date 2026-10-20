@@ -26,6 +26,13 @@ struct TCodeRange
     uint16_t maxValue;
 };
 
+enum class TCodeEvent {
+    NOTIFY,
+    OTHER,
+    RANGE_GET,
+    RANGE_STORE
+};
+
 // ============================================
 //           TCODE CLASS
 // ============================================
@@ -78,10 +85,7 @@ public:
     void formatRange(char *buf, const size_t len, const TCodeRange* &ranges, const size_t rangesLen);
 
     // Sets the callback function used by TCode
-	void setTCodeCallback(std::function<void (const char*)> f);
-
-    // Sets the callback function used by TCode
-	void setTCodeRangeCallback(std::function<void ()> f);
+	void setTCodeCallback(std::function<void (TCodeEvent, const char*)> f);
 
 private:
 
@@ -100,22 +104,20 @@ private:
     char _cmdBuffer[48] = {0};
     uint8_t _cmdLen = 0;
 
-    std::function<void (const char*)> _tcodeCallBackFunction = 0;
-    std::function<void ()> _tcodeRangeCallBackFunction = 0;
+    std::function<void (TCodeEvent, const char*)> _tcodeCallBackFunction = 0;
     
-
     // Command processing
     void processCommand(const char* cmd);
     void processAxisCommand(const char* cmd);
     void processDeviceCommand(const char* cmd);
-    void processSaveCommand(const char* cmd);
+    // void processSaveCommand(const char* cmd);
     void executeAll();
 
     // Output functions
     // void queueResponse(const char* text);
     // void queueD2AxisReport(char letter, uint8_t index);
     // void queueNextD2DumpLine();
-    void respond(const char* text);
+    void respond(TCodeEvent event, const char* text);
 
     // Helper function that turns "L3" into letter='L' and index=3
     bool parseChannel(const char* channel, char& letter, uint8_t& index) const;

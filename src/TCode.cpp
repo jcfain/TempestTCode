@@ -160,14 +160,9 @@ void TCode::formatRange(char *buf, const size_t len, const TCodeRange* &ranges, 
     //         _name);
 }
 
-void TCode::setTCodeCallback(std::function<void(const char*)> f)
+void TCode::setTCodeCallback(std::function<void(TCodeEvent, const char*)> f)
 {
     _tcodeCallBackFunction = f == nullptr ? 0 : f;
-}
-
-void TCode::setTCodeRangeCallback(std::function<void()> f)
-{
-    _tcodeRangeCallBackFunction = f == nullptr ? 0 : f;
 }
 
 // Stop all channels
@@ -192,11 +187,11 @@ void TCode::processCommand(const char* cmd) {
     } else if (first == 'D') {
         processDeviceCommand(cmd);
     } else if (first == '$') {
-        processSaveCommand(cmd);
+        respond(TCodeEvent::RANGE_STORE, cmd);
     } else  {
         // anything else is send back to the firmware 
         // to decide what it wants to do
-        respond(cmd);
+        respond(TCodeEvent::OTHER, cmd);
     }
 }
 
@@ -301,15 +296,14 @@ void TCode::processAxisCommand(const char* cmd) {
 // "D" or Device command parser
 void TCode::processDeviceCommand(const char* cmd) {
     if (strcmp(cmd, "D0") == 0) {
-        respond(_name);
+        respond(TCodeEvent::NOTIFY, _name);
     } else if (strcmp(cmd, "D1") == 0) {
-        respond(TCODE_VERSION_INFO);
+        respond(TCodeEvent::NOTIFY, TCODE_VERSION_INFO);
     } else if (strcmp(cmd, "D2") == 0) {
-        if(_tcodeRangeCallBackFunction)
-            _tcodeRangeCallBackFunction();
+        respond(TCodeEvent::RANGE_GET, cmd);
     } else if (strcmp(cmd, "DSTOP") == 0) {
         stopAll();
-        respond("STOP");
+        respond(TCodeEvent::NOTIFY, "STOP");
     }
     // anything else is silently ignored
 }
@@ -358,13 +352,8 @@ bool TCode::parseRange(TCodeRange& range, const char* cmd) {
     return true;
 }
 
-// "$" or Save command parser
-void TCode::processSaveCommand(const char* cmd) {
-    if (!cmd || cmd[0] != '$') return;
-    
-    TCodeRange range;
-    if(!parseRange(range, cmd))// Only range saves are currently supported in tcode spec.
-        respond(cmd);// Just send it back to the firmware if its not a range
+// // "$" or Save command parser
+// void TCode::processSaveCommand(const char* cmd) {
 
     // #if defined(ARDUINO_ARCH_ESP32)
     //     // ESP32 preferences parameter save
@@ -393,7 +382,7 @@ void TCode::processSaveCommand(const char* cmd) {
     // // Return report if preferences changed
     // queueD2AxisReport(letter, index);
 
-}
+// }
 
 // Execute queued commands on all axes
 void TCode::executeAll() {
@@ -404,19 +393,6 @@ void TCode::executeAll() {
         if (_Aux[i]) _Aux[i]->setAxis();
     }
 }
-
-// // Clears output buffer and loads a string for output
-// void TCode::queueResponse(const char* text) {
-//     _outputLen = 0;
-//     _outputPos = 0;
-//     if (text) {
-//         while (*text && _outputLen < 63) {
-//             _outputBuffer[_outputLen++] = *text++;
-//         }
-//     }
-//     if (_outputLen < 63) { _outputBuffer[_outputLen++] = '\r'; }
-//     if (_outputLen < 63) { _outputBuffer[_outputLen++] = '\n'; }
-// }
 
 // // Puts a specific D2 output report into the output buffer
 // void TCode::queueD2AxisReport(char letter, uint8_t index) {
@@ -507,10 +483,7 @@ bool TCode::parseChannel(const char* cmd, char& letter, uint8_t& index) const {
     return (letter == 'L' || letter == 'R' || letter == 'V' || letter == 'A');
 }
 
-void TCode::respond(const char *text) {
-    // Serial.printf("respond: %s\n", text);
+void TCode::respond(TCodeEvent event, const char *text) {
     if(_tcodeCallBackFunction)
-        _tcodeCallBackFunction(text);
-    // else 
-    //     Serial.printf("tcode_callback null: %s\n", text);
+        _tcodeCallBackFunction(event, text);
 }
