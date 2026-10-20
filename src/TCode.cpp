@@ -140,7 +140,7 @@ void TCode::stringInput(const char* str) {
     }
 }
 
-void TCode::formatRange(char *buf, const size_t len, const TCodeRange* &ranges, const size_t rangesLen)
+void TCode::formatRange(char *buf, const size_t len, const TCodeRange* ranges, const size_t rangesLen)
 {
     size_t objSize = sizeof(TCodeRange);
     char line[len];
@@ -186,7 +186,7 @@ void TCode::processCommand(const char* cmd) {
     } else if (first == 'D') {
         processDeviceCommand(cmd);
     } else if (first == '$') {
-        respond(TCodeEvent::RANGE_STORE, cmd);
+        processSaveCommand(cmd);
     } else  {
         // anything else is send back to the firmware 
         // to decide what it wants to do
@@ -351,9 +351,10 @@ bool TCode::parseRange(TCodeRange& range, const char* cmd) {
     return true;
 }
 
-// // "$" or Save command parser
-// void TCode::processSaveCommand(const char* cmd) {
+// "$" or Save command parser
+void TCode::processSaveCommand(const char* cmd) {
 
+    respond(TCodeEvent::RANGE_STORE, cmd);
     // #if defined(ARDUINO_ARCH_ESP32)
     //     // ESP32 preferences parameter save
     //     _prefs.begin("tcode", false);
@@ -381,7 +382,7 @@ bool TCode::parseRange(TCodeRange& range, const char* cmd) {
     // // Return report if preferences changed
     // queueD2AxisReport(letter, index);
 
-// }
+}
 
 // Execute queued commands on all axes
 void TCode::executeAll() {

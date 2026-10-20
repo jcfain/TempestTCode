@@ -70,7 +70,7 @@ public:
     bool parseRange(TCodeRange& range, const char* cmd);
 
     // Formats the TCodeRange object into a tcode string to return to client
-    void formatRange(char *buf, const size_t len, const TCodeRange* &ranges, const size_t rangesLen);
+    void formatRange(char *buf, const size_t len, const TCodeRange* ranges, const size_t rangesLen);
 
     // Sets the callback function used by TCode
 	void setTCodeCallback(std::function<void (TCodeEvent, const char*)> f);
@@ -98,7 +98,7 @@ private:
     void processCommand(const char* cmd);
     void processAxisCommand(const char* cmd);
     void processDeviceCommand(const char* cmd);
-    // void processSaveCommand(const char* cmd);
+    void processSaveCommand(const char* cmd);
     void executeAll();
 
     // Output functions
