@@ -14,11 +14,12 @@
 #include <functional>
 #include "TCodeEnum.h"
 #include "Axis.h"
-#include "common.h"
+#include "TCodeCommon.h"
 
 #ifndef TCODE_VERSION_INFO
 #define TCODE_VERSION_INFO  "TCode v0.4"
 #endif
+
 
 struct TCodeRange
 {
@@ -32,7 +33,7 @@ struct TCodeRange
 // ============================================
 class TCode {
 public:
-    TCode(const char* nameIn, std::function<uint64_t ()> millisCallBackFunction);
+    TCode(const char* nameIn, TCodeMilliCallback millisCallBackFunction);
 
     // Register an axis to its official TCode channel.
     // Pass the channel exactly as the protocol expects ("L0", "R3", "V7", "A1", etc.).
@@ -85,7 +86,7 @@ private:
 
     // Device name
     const char* _name;
-    Common _common;
+    TCodeCommon _common;
 
     // Internal storage — fixed arrays of pointers, one per channel type
     Axis* _Lin[10] = {nullptr};
